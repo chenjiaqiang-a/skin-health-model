@@ -9,14 +9,12 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
-import pandas as pd
-from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, random_split
 
 from models.baseline import ResNet50Baseline
 from models.loss_fn import FocalLoss
 from utils.dataset import AcneImageDataset
-from utils.data_trans import BASIC_TRAIN_TRANS, BASIC_TEST_TRANS
+from utils.data_trans import BASIC_TRAIN_TRANS
 from utils import save_state_dict, save_result, Logger
 
 
@@ -34,17 +32,13 @@ def main(args):
     logger.info(f"Ex({run_id}) run by Chen: Baseline train on {device}")
 
     # Data Preparation
-    df = pd.read_csv('./data/HX_Acne_Image_GroundTruth_Train.csv')
-    x_train, x_valid, y_train, y_valid = train_test_split(df, df['label'], test_size=0.2, )
-    x_train.to_csv(os.path.join(run_folder, 'temp_train.csv'))
-    x_valid.to_csv(os.path.join(run_folder, 'temp_valid.csv'))
+    dataset = AcneImageDataset('./data/HX_Acne_Image_GroundTruth_Train.csv',
+                               './data/images',
+                               transform=BASIC_TRAIN_TRANS)
+    valid_size = int(len(dataset) * args.val_size)
+    train_size = len(dataset) - valid_size
+    train_dataset, valid_dataset = random_split(dataset, [train_size, valid_size])
 
-    train_dataset = AcneImageDataset(os.path.join(run_folder, 'temp_train.csv'),
-                                     './data/images',
-                                     transform=BASIC_TRAIN_TRANS)
-    valid_dataset = AcneImageDataset(os.path.join(run_folder, 'temp_valid.csv'),
-                                     './data/images',
-                                     transform=BASIC_TEST_TRANS)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=4)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
 
@@ -79,8 +73,9 @@ def main(args):
     logger.info(f"learning_rate   {args.lr}")
     logger.info(f"optimizer       {args.opt}")
     logger.info(f"early_threshold {args.early_threshold}")
+    logger.info(f"val_size        {args.val_size}")
     logger.info(f"model           ResNet50Baseline")
-    logger.info(f"criterion       CrossEntropyLoss")
+    logger.info(f"criterion       {args.loss}")
 
     train_loss = []
     train_acc = []
@@ -105,7 +100,6 @@ def main(args):
         if valid_output['acc'] > best_valid_acc:
             best_valid_acc = valid_output['acc']
             epoch_counter = args.early_threshold
-            save_state_dict(model, model_folder, f"{epoch}-best-model.pth")
             save_state_dict(model, model_folder, "best-model.pth")
             logger.info("Saving Best...")
         else:
@@ -117,6 +111,7 @@ def main(args):
 
     save_state_dict(model, model_folder, "final-model.pth")
     save_result({
+        "train_param": f"{args.loss}-base",
         "train_loss": train_loss,
         "train_acc": train_acc,
         "valid_loss": valid_loss,
@@ -191,8 +186,9 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate')
     parser.add_argument('--run_folder', type=str, default='./run/baseline')
     parser.add_argument('--early_threshold', type=int, default=20)
+    parser.add_argument('--val_size', type=float, default=0.1)
     parser.add_argument('--loss', type=str, default='ce', choices=('ce', 'focal'))
     parser.add_argument('--opt', type=str, default='adam', choices=('sgd', 'adam', 'rmsprop'))
 
-    arguments = parser.parse_known_args()[0]
+    arguments = parser.parse_args()
     main(arguments)

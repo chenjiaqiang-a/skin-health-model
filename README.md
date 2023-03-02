@@ -18,6 +18,10 @@ jupyter nbconvert --to script test.ipynb
 CUDA_VISIBLE_DEVICES=1
 # run .py script with nohup
 nohup python test.py &
+# run shell script
+chmod o+x test.sh
+./test.sh
+nohuo ./test.sh &
 ```
 压缩/解压文件
 ```shell script
