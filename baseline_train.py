@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-# 基础模型训练测试
+# 基础模型训练
 # 指定gpu请设置环境变量 CUDA_VISIBLE_DEVICES
 import os
 import datetime
@@ -14,6 +14,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from models.baseline import ResNet50Baseline
+from models.loss_fn import FocalLoss
 from utils.dataset import AcneImageDataset
 from utils.data_trans import BASIC_TRAIN_TRANS, BASIC_TEST_TRANS
 from utils import save_state_dict, save_result, Logger
@@ -23,16 +24,18 @@ def main(args):
     run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_folder = os.path.join(args.run_folder, run_id)
     model_folder = os.path.join(run_folder, 'models')
+    image_folder = os.path.join(run_folder, 'images')
     if not os.path.exists(run_folder):
         os.makedirs(run_folder)
         os.makedirs(model_folder)
+        os.makedirs(image_folder)
     logger = Logger(run_folder, "train")
     device = torch.device('cuda:0')
     logger.info(f"Ex({run_id}) run by Chen: Baseline train on {device}")
 
     # Data Preparation
     df = pd.read_csv('./data/HX_Acne_Image_GroundTruth_Train.csv')
-    x_train, x_valid, y_train, y_valid = train_test_split(df, df['label'], test_size=0.2,)
+    x_train, x_valid, y_train, y_valid = train_test_split(df, df['label'], test_size=0.2, )
     x_train.to_csv(os.path.join(run_folder, 'temp_train.csv'))
     x_valid.to_csv(os.path.join(run_folder, 'temp_valid.csv'))
 
@@ -43,7 +46,7 @@ def main(args):
                                      './data/images',
                                      transform=BASIC_TEST_TRANS)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=4)
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size,shuffle=False, drop_last=False, num_workers=4)
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
 
     os.remove(os.path.join(run_folder, 'temp_train.csv'))
     os.remove(os.path.join(run_folder, 'temp_valid.csv'))
@@ -54,7 +57,10 @@ def main(args):
     model = ResNet50Baseline().to(device)
 
     # Training Preparation
-    criterion = nn.CrossEntropyLoss(reduction="none")
+    if args.loss == 'focal':
+        criterion = FocalLoss(reduction="none")
+    else:
+        criterion = nn.CrossEntropyLoss(reduction="none")
     if args.opt == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=args.lr,
                               momentum=0.9, weight_decay=5e-4)
@@ -65,7 +71,7 @@ def main(args):
         optimizer = optim.Adam(model.parameters(), lr=args.lr,
                                betas=(0.9, 0.999), weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-4)
-    
+
     # Train
     logger.info("Training parameters:")
     logger.info(f"batch_size      {args.batch_size}")
@@ -100,6 +106,7 @@ def main(args):
             best_valid_acc = valid_output['acc']
             epoch_counter = args.early_threshold
             save_state_dict(model, model_folder, f"{epoch}-best-model.pth")
+            save_state_dict(model, model_folder, "best-model.pth")
             logger.info("Saving Best...")
         else:
             epoch_counter -= 1
@@ -109,7 +116,13 @@ def main(args):
             break
 
     save_state_dict(model, model_folder, "final-model.pth")
-    save_result({}, run_folder, "result.pkl")
+    save_result({
+        "train_loss": train_loss,
+        "train_acc": train_acc,
+        "valid_loss": valid_loss,
+        "valid_acc": valid_acc,
+    }, run_folder, "result.pkl")
+    logger.info(f"Ex({run_id}) is over!")
 
 
 def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
@@ -121,15 +134,15 @@ def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
         total_sample += len(labels)
         images = images.to(device)
         labels = labels.to(device)
-        
+
         output = model(images)
         loss = loss_fn(output, labels)
         total_loss += loss.sum().detach().cpu().item()
-        
+
         optimizer.zero_grad()
         loss.mean().backward()
         optimizer.step()
-        
+
         prediction = torch.argmax(output, 1)
         correct = (prediction == labels).sum().int().detach().cpu().item()
         total_correct += correct
@@ -154,7 +167,7 @@ def valid_epoch(model, data_iter, loss_fn, device):
             total_sample += len(labels)
             images = images.to(device)
             labels = labels.to(device)
-            
+
             output = model(images)
             loss = loss_fn(output, labels)
             total_loss += loss.sum().cpu().item()
@@ -178,9 +191,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate')
     parser.add_argument('--run_folder', type=str, default='./run/baseline')
     parser.add_argument('--early_threshold', type=int, default=20)
-    parser.add_argument('--opt', type=str, default='adam',
-                        choices=('sgd', 'adam', 'rmsprop'))
+    parser.add_argument('--loss', type=str, default='ce', choices=('ce', 'focal'))
+    parser.add_argument('--opt', type=str, default='adam', choices=('sgd', 'adam', 'rmsprop'))
 
     arguments = parser.parse_known_args()[0]
     main(arguments)
-
