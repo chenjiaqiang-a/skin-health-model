@@ -19,18 +19,20 @@ SUMMARY_ITEMS = [
     'run_id',
     'train_param',
     'final-train-acc',
+    'final-test-acc',
+    'best-train-acc',
+    'best-test-acc',
+]
+DETAIL_ITEMS = [
     'final-train-precision',
     'final-train-recall',
     'final-train-f1',
-    'final-test-acc',
     'final-test-precision',
     'final-test-recall',
     'final-test-f1',
-    'best-train-acc',
     'best-train-precision',
     'best-train-recall',
     'best-train-f1',
-    'best-test-acc',
     'best-test-precision',
     'best-test-recall',
     'best-test-f1',
@@ -65,6 +67,9 @@ def main(args):
         item: [] for item in SUMMARY_ITEMS
     }
     for run_id in run_ids:
+        detail = {
+            item: [] for item in DETAIL_ITEMS
+        }
         run_folder = os.path.join(base_folder, run_id)
         model_folder = os.path.join(run_folder, 'models')
         image_folder = os.path.join(run_folder, 'images')
@@ -88,13 +93,13 @@ def main(args):
                               'c matrix for test data',
                               os.path.join(image_folder, 'final-test-c-matrix.png'))
         summary['final-train-acc'].append(train_out["acc"])
-        summary['final-train-precision'].append(train_out['precision'])
-        summary['final-train-recall'].append(train_out['recall'])
-        summary['final-train-f1'].append(train_out['f1_score'])
         summary['final-test-acc'].append(test_out["acc"])
-        summary['final-test-precision'].append(test_out['precision'])
-        summary['final-test-recall'].append(test_out['recall'])
-        summary['final-test-f1'].append(test_out['f1_score'])
+        detail['final-train-precision'] = train_out['precision']
+        detail['final-train-recall'] = train_out['recall']
+        detail['final-train-f1'] = train_out['f1_score']
+        detail['final-test-precision'] = test_out['precision']
+        detail['final-test-recall'] = test_out['recall']
+        detail['final-test-f1'] = test_out['f1_score']
 
         # Test Best
         load_state_dict(model, os.path.join(model_folder, 'best-model.pth'))
@@ -109,13 +114,15 @@ def main(args):
                               'c matrix for test data',
                               os.path.join(image_folder, 'best-test-c-matrix.png'))
         summary['best-train-acc'].append(train_out["acc"])
-        summary['best-train-precision'].append(train_out['precision'])
-        summary['best-train-recall'].append(train_out['recall'])
-        summary['best-train-f1'].append(train_out['f1_score'])
         summary['best-test-acc'].append(test_out["acc"])
-        summary['best-test-precision'].append(test_out['precision'])
-        summary['best-test-recall'].append(test_out['recall'])
-        summary['best-test-f1'].append(test_out['f1_score'])
+        detail['best-train-precision'] = train_out['precision']
+        detail['best-train-recall'] = train_out['recall']
+        detail['best-train-f1'] = train_out['f1_score']
+        detail['best-test-precision'] = test_out['precision']
+        detail['best-test-recall'] = test_out['recall']
+        detail['best-test-f1'] = test_out['f1_score']
+        df = pd.DataFrame.from_dict(detail, orient='index', columns=train_dataset.categories)
+        df.to_csv(os.path.join(run_folder, 'evaluation.csv'))
     df = pd.DataFrame.from_dict(summary)
     df.to_csv(os.path.join(base_folder, 'evaluation.csv'), index=False)
 

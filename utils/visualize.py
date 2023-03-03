@@ -27,10 +27,11 @@ def plot_confusion_matrix(cm, classes, title=None, filename="cm.png", cmap="Blue
 
     ax.set(xticks=np.arange(cm.shape[1]),
            yticks=np.arange(cm.shape[0]),
-           xticklabels=classes, yticklabels=classes,
            title=title,
            ylabel='Actual',
            xlabel='Predicted')
+    ax.set_xticklabels(labels=classes, rotation=45)
+    ax.set_yticklabels(labels=classes, rotation=45)
 
     # 通过绘制格网，模拟每个单元格的边框
     ax.set_xticks(np.arange(cm.shape[1] + 1) - .5, minor=True)

@@ -2,6 +2,20 @@ import torch
 import torch.nn as nn
 
 
+def get_loss_fn(loss, **kwargs):
+    if loss == 'focal':
+        loss_fn = FocalLoss(**kwargs)
+    elif loss == 'dice':
+        loss_fn = DiceLoss(**kwargs)
+    elif loss == 'dice_focal':
+        loss_fn = DiceFocal(**kwargs)
+    elif loss == 'dice_ce':
+        loss_fn = DiceCE(**kwargs)
+    else:
+        loss_fn = nn.CrossEntropyLoss(**kwargs)
+    return loss_fn
+
+
 class FocalLoss(nn.Module):
     def __init__(self, num_classes: int = 8, alpha: list = None, gamma=2, reduction='mean'):
         """ Focal Loss

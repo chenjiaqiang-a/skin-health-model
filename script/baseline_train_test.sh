@@ -1,9 +1,9 @@
-for i in {1..3}; do
-  python baseline_train.py
-done
+python baseline_train.py
+python baseline_train.py
+python baseline_train.py
 
-for i in {1..3}; do
-  python baseline_train.py --loss focal
-done
+python baseline_train.py --loss focal
+python baseline_train.py --loss focal
+python baseline_train.py --loss focal
 
 python baseline_test.py
