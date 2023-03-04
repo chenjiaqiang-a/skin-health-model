@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--run_folder', type=str, default='./run/baseline')
-    parser.add_argument('--early_threshold', type=int, default=40)
+    parser.add_argument('--early_threshold', type=int, default=20)
     parser.add_argument('--val_size', type=float, default=0.1)
     parser.add_argument('--loss', type=str, default='ce', choices=('ce', 'focal'))
     parser.add_argument('--opt', type=str, default='adam', choices=('sgd', 'adam', 'rmsprop'))

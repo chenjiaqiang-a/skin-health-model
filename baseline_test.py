@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from models.baseline import ResNet50Baseline
 from utils.dataset import AcneImageDataset
 from utils.data_trans import BASIC_TEST_TRANS
-from utils import load_state_dict, Logger, Evaluation, plot_confusion_matrix, plot_train_curve
+from utils import load_state_dict, Evaluation, plot_confusion_matrix, plot_train_curve
 
 SUMMARY_ITEMS = [
     'run_id',
@@ -23,28 +23,12 @@ SUMMARY_ITEMS = [
     'best-train-acc',
     'best-test-acc',
 ]
-DETAIL_ITEMS = [
-    'final-train-precision',
-    'final-train-recall',
-    'final-train-f1',
-    'final-test-precision',
-    'final-test-recall',
-    'final-test-f1',
-    'best-train-precision',
-    'best-train-recall',
-    'best-train-f1',
-    'best-test-precision',
-    'best-test-recall',
-    'best-test-f1',
-]
 
 
 def main(args):
     base_folder = args.run_folder
     run_ids = os.listdir(base_folder)
-    logger = Logger(base_folder, "test")
     device = torch.device('cuda:0')
-    logger.info(f"Evaluation run by Chen: Baseline test on {device}")
 
     # Data Preparation
     train_dataset = AcneImageDataset('./data/HX_Acne_Image_GroundTruth_Train.csv',
@@ -55,8 +39,6 @@ def main(args):
                                     transform=BASIC_TEST_TRANS)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
-    logger.info(f"Test on HX Skin DAtaset(Acne) with {len(train_dataset)} train samples, "
-                f"{len(test_dataset)} test samples")
 
     # Model Preparation
     model = ResNet50Baseline()
@@ -67,9 +49,6 @@ def main(args):
         item: [] for item in SUMMARY_ITEMS
     }
     for run_id in run_ids:
-        detail = {
-            item: [] for item in DETAIL_ITEMS
-        }
         run_folder = os.path.join(base_folder, run_id)
         model_folder = os.path.join(run_folder, 'models')
         image_folder = os.path.join(run_folder, 'images')
@@ -82,8 +61,8 @@ def main(args):
 
         # Test Final
         load_state_dict(model, os.path.join(model_folder, 'final-model.pth'))
-        train_out = evaluation.evaluate(['acc', 'precision', 'recall', 'f1_score', 'c_matrix'], model, train_loader)
-        test_out = evaluation.evaluate(['acc', 'precision', 'recall', 'f1_score', 'c_matrix'], model, test_loader)
+        train_out = evaluation.evaluate(['acc', 'c_matrix'], model, train_loader)
+        test_out = evaluation.evaluate(['acc', 'c_matrix'], model, test_loader)
         plot_confusion_matrix(train_out["c_matrix"],
                               train_dataset.categories,
                               'c matrix for train data',
@@ -94,17 +73,19 @@ def main(args):
                               os.path.join(image_folder, 'final-test-c-matrix.png'))
         summary['final-train-acc'].append(train_out["acc"])
         summary['final-test-acc'].append(test_out["acc"])
-        detail['final-train-precision'] = train_out['precision']
-        detail['final-train-recall'] = train_out['recall']
-        detail['final-train-f1'] = train_out['f1_score']
-        detail['final-test-precision'] = test_out['precision']
-        detail['final-test-recall'] = test_out['recall']
-        detail['final-test-f1'] = test_out['f1_score']
+        df = pd.DataFrame(train_out['c_matrix'],
+                          index=train_dataset.categories,
+                          columns=train_dataset.categories)
+        df.to_csv(os.path.join(run_folder, 'best-train-c-matrix.csv'), index=False)
+        df = pd.DataFrame(test_out['c_matrix'],
+                          index=train_dataset.categories,
+                          columns=train_dataset.categories)
+        df.to_csv(os.path.join(run_folder, 'best-test-c-matrix.csv'), index=False)
 
         # Test Best
         load_state_dict(model, os.path.join(model_folder, 'best-model.pth'))
-        train_out = evaluation.evaluate(['acc', 'precision', 'recall', 'f1_score', 'c_matrix'], model, train_loader)
-        test_out = evaluation.evaluate(['acc', 'precision', 'recall', 'f1_score', 'c_matrix'], model, test_loader)
+        train_out = evaluation.evaluate(['acc', 'c_matrix'], model, train_loader)
+        test_out = evaluation.evaluate(['acc', 'c_matrix'], model, test_loader)
         plot_confusion_matrix(train_out["c_matrix"],
                               train_dataset.categories,
                               'c matrix for train data',
@@ -115,14 +96,14 @@ def main(args):
                               os.path.join(image_folder, 'best-test-c-matrix.png'))
         summary['best-train-acc'].append(train_out["acc"])
         summary['best-test-acc'].append(test_out["acc"])
-        detail['best-train-precision'] = train_out['precision']
-        detail['best-train-recall'] = train_out['recall']
-        detail['best-train-f1'] = train_out['f1_score']
-        detail['best-test-precision'] = test_out['precision']
-        detail['best-test-recall'] = test_out['recall']
-        detail['best-test-f1'] = test_out['f1_score']
-        df = pd.DataFrame.from_dict(detail, orient='index', columns=train_dataset.categories)
-        df.to_csv(os.path.join(run_folder, 'evaluation.csv'))
+        df = pd.DataFrame(train_out['c_matrix'],
+                          index=train_dataset.categories,
+                          columns=train_dataset.categories)
+        df.to_csv(os.path.join(run_folder, 'best-train-c-matrix.csv'), index=False)
+        df = pd.DataFrame(test_out['c_matrix'],
+                          index=train_dataset.categories,
+                          columns=train_dataset.categories)
+        df.to_csv(os.path.join(run_folder, 'best-test-c-matrix.csv'), index=False)
     df = pd.DataFrame.from_dict(summary)
     df.to_csv(os.path.join(base_folder, 'evaluation.csv'), index=False)
 

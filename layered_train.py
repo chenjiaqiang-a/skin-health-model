@@ -71,20 +71,20 @@ def main(args):
     second_result = train_and_valid(model, criterion, optimizer,
                                     train_loader, valid_loader,
                                     args.epochs, args.early_threshold,
-                                    model_folder, "second-best-model.pth",
+                                    model_folder, "best-model.pth",
                                     logger, device)
 
-    save_state_dict(model, model_folder, 'second-final-model.pth')
+    save_state_dict(model, model_folder, 'final-model.pth')
     save_result({
         "train_param": f"{args.loss}-base",
         "first-train_loss": first_result['train_loss'],
         "first-train_acc": first_result['train_acc'],
         "first-valid_loss": first_result['valid_loss'],
         "first-valid_acc": first_result['valid_acc'],
-        "second-train_loss": second_result['train_loss'],
-        "second-train_acc": second_result['train_acc'],
-        "second-valid_loss": second_result['valid_loss'],
-        "second-valid_acc": second_result['valid_acc'],
+        "train_loss": second_result['train_loss'],
+        "train_acc": second_result['train_acc'],
+        "valid_loss": second_result['valid_loss'],
+        "valid_acc": second_result['valid_acc'],
     }, run_folder, "result.pkl")
     logger.info(f"Layered Ex({run_id}) is over!")
 
