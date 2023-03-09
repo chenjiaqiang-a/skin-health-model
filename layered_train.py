@@ -33,7 +33,7 @@ def main(args):
     model = ResNet50Baseline().to(device)
 
     # Training Preparation
-    criterion = get_loss_fn(args.loss, reduction=None)
+    criterion = get_loss_fn(args.loss, reduction="none")
     optimizer = get_optimizer(args.opt, model.parameters(), args.lr)
 
     # Train
@@ -49,6 +49,7 @@ def main(args):
 
     dataset = MappingDataset('./data/HX_Acne_Image_GroundTruth_Train.csv',
                              './data/images',
+                             mapping=args.mapping,
                              transform=BASIC_TRAIN_TRANS)
     train_loader, valid_loader = train_valid_split(dataset, args.val_size, args.batch_size)
 
@@ -99,6 +100,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_size', type=float, default=0.1)
     parser.add_argument('--loss', type=str, default='ce', choices=('ce', 'focal'))
     parser.add_argument('--opt', type=str, default='adam', choices=('sgd', 'adam', 'rmsprop'))
+    parser.add_argument('--mapping', type=str, default='base')
 
     arguments = parser.parse_args()
     main(arguments)

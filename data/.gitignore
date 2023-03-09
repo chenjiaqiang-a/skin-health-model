@@ -1,3 +1,7 @@
+/test/
 /images/
 *.json
 *.csv
+*.jpg
+*.JPG
+*.png

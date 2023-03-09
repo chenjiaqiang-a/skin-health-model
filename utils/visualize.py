@@ -51,6 +51,7 @@ def plot_confusion_matrix(cm, classes, title=None, filename="cm.png", cmap="Blue
     fig.tight_layout()
     plt.savefig(filename, dpi=300)
     plt.show()
+    plt.clf()
 
 
 def plot_roc_curves(fpr, tpr, roc_auc, categories=None, title=None, filename="roc.png"):

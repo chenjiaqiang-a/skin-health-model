@@ -17,7 +17,7 @@ from share import train_valid_split, get_optimizer, train_and_valid
 
 
 def main(args):
-    run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_id = f'EXP-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     run_folder = os.path.join(args.run_folder, run_id)
     model_folder = os.path.join(run_folder, 'models')
     image_folder = os.path.join(run_folder, 'images')
@@ -39,7 +39,7 @@ def main(args):
     model = ResNet50Baseline().to(device)
 
     # Training Preparation
-    criterion = get_loss_fn(args.loss, reduction=None)
+    criterion = get_loss_fn(args.loss, reduction="none")
     optimizer = get_optimizer(args.opt, model.parameters(), args.lr)
 
     # Train
@@ -56,7 +56,7 @@ def main(args):
     result = train_and_valid(model, criterion, optimizer,
                              train_loader, valid_loader,
                              args.epochs, args.early_threshold,
-                             model_folder, "first-best-model.pth",
+                             model_folder, "best-model.pth",
                              logger, device)
 
     save_state_dict(model, model_folder, "final-model.pth")
