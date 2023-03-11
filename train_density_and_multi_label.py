@@ -8,11 +8,11 @@ import numpy as np
 
 import config
 from share import train_valid_split, get_optimizer
-from models.acc_net import ACCNet
+from models.networks import ACCNet
 from models.loss_fn import get_loss_fn
 from utils.dataset import ImageWithDensityAnd3LevelLabel
 from utils.data_trans import image_density_trans_train, image_density_trans_test
-from utils import Logger, save_state_dict
+from utils import Logger, save_state_dict, save_result
 
 
 def main(args):
@@ -39,8 +39,8 @@ def main(args):
     train_loader.dataset.transform = image_density_trans_train
     valid_loader.dataset.transform = image_density_trans_test
     logger.info(f"Total number of samples: {len(dataset)}"
-                f"({int(len(dataset) * args.valid_size)} for train, "
-                f"{len(dataset) - int(len(dataset) * args.valid_size)} for valid)")
+                f"({len(dataset) - int(len(dataset) * args.valid_size)} for train, "
+                f"{int(len(dataset) * args.valid_size)} for valid)")
 
     # Model Preparation
     model = ACCNet(config.NUM_CLASSES, config.NUM_1ST_LEVEL_CLASSES, config.NUM_2ND_LEVEL_CLASSES).to(device)
@@ -48,16 +48,20 @@ def main(args):
     # Training Preparation
     loss_fn = get_loss_fn(args.loss_fn, reduction='mean')
     optimizer = get_optimizer(args.optim, model.parameters(), args.lr)
-    logger.info("Training parameters:")
-    logger.info(f"\nbatch_size      {args.batch_size}\n"
+    logger.info("Training parameters:\n"
+                f"batch_size      {args.batch_size}\n"
                 f"epochs          {args.epochs}\n"
-                f"loss_fn         {args.loss}\n"
+                f"loss_fn         {args.loss_fn}\n"
                 f"learning_rate   {args.lr}\n"
-                f"optimizer       {args.opt}")
+                f"optimizer       {args.optim}")
 
     # Training
     result = train_and_valid(model, loss_fn, optimizer, train_loader, valid_loader,
                              args.epochs, device, model_folder, logger)
+
+    # Saving Results
+    save_state_dict(model, model_folder, 'final-model.pth')
+    save_result(result, run_folder)
 
 
 def train_and_valid(model, loss_fn, optimizer,
@@ -172,7 +176,7 @@ def train_epoch(model, data_loader, loss_fn, optimizer, scheduler, device):
     total_correct = 0
     for image, (density, d_mask), (label_1st, label_2nd, label) in data_loader:
         total_sample += len(label)
-        total_density_map += sum(torch.ones_like(d_mask)[d_mask]).numpy()
+        total_density_map += torch.sum(torch.ones_like(d_mask)[d_mask]).numpy()
         image = image.to(device)
         density, d_mask = density.to(device), d_mask.to(device)
         label_1st, label_2nd, label = label_1st.to(device), label_2nd.to(device), label.to(device)
@@ -231,7 +235,7 @@ def valid_epoch(model, data_loader, loss_fn, device):
     total_correct = 0
     for image, (density, d_mask), (label_1st, label_2nd, label) in data_loader:
         total_sample += len(label)
-        total_density_map += sum(torch.ones_like(d_mask)[d_mask]).numpy()
+        total_density_map += torch.sum(torch.ones_like(d_mask)[d_mask]).numpy()
         image = image.to(device)
         density, d_mask = density.to(device), d_mask.to(device)
         label_1st, label_2nd, label = label_1st.to(device), label_2nd.to(device), label.to(device)
@@ -276,4 +280,4 @@ if __name__ == '__main__':
     parser.add_argument('--run_folder', type=str, default='./run/acc')
 
     arguments = parser.parse_args()
-    main()
+    main(arguments)
