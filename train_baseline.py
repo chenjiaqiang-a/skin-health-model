@@ -66,40 +66,35 @@ def main(args):
     logger.info(f"{run_id} is over!")
 
 
-def train_and_valid(model, criterion, optimizer, train_iter, valid_iter,
+RESULT_ITEMS = ['loss', 'acc']
+
+
+def train_and_valid(model, loss_fn, optimizer, train_iter, valid_iter,
                     epochs, device, save_folder, logger):
     logger.info("Start Training...")
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-4)
 
-    train_result = {
-        'loss': [],
-        'acc': [],
-    }
-    valid_result = {
-        'loss': [],
-        'acc': [],
+    result = {
+        'train': {item: [] for item in RESULT_ITEMS},
+        'valid': {item: [] for item in RESULT_ITEMS}
     }
     best_valid_acc = 0
     for epoch in range(1, epochs + 1):
-        train_ep_out = train_epoch(model, train_iter, criterion, optimizer, scheduler, device)
-        valid_ep_out = valid_epoch(model, valid_iter, criterion, device)
+        train_ep_out = train_epoch(model, train_iter, loss_fn, optimizer, scheduler, device)
+        valid_ep_out = valid_epoch(model, valid_iter, loss_fn, device)
         logger.info(f"Epoch {epoch:>3d}: "
-                    f"TRAIN loss {train_ep_out['loss']:>10.6f} acc {train_ep_out['acc']:>6.4f} | "
-                    f"VALID loss {valid_ep_out['loss']:>10.6f} acc {valid_ep_out['acc']:>6.4f}")
+                    f"TRAIN loss {train_ep_out['loss']:>7.5f} acc {train_ep_out['acc']:>5.3f} | "
+                    f"VALID loss {valid_ep_out['loss']:>7.5f} acc {valid_ep_out['acc']:>5.3f}")
 
-        train_result['loss'].append(train_ep_out['loss'])
-        train_result['acc'].append(train_ep_out['acc'])
-        valid_result['loss'].append(valid_ep_out['loss'])
-        valid_result['acc'].append(valid_ep_out['acc'])
-        if valid_result['acc'][-1] > best_valid_acc:
-            best_valid_acc = valid_result['acc'][-1]
+        for item in RESULT_ITEMS:
+            result['train'][item].append(train_ep_out[item])
+            result['valid'][item].append(valid_ep_out[item])
+        if valid_ep_out['acc'] > best_valid_acc:
+            best_valid_acc = valid_ep_out['acc']
             save_state_dict(model, save_folder, 'best-model.pth')
             logger.info("Saving Best...")
 
-    return {
-        'train': train_result,
-        'valid': valid_result,
-    }
+    return result
 
 
 def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
@@ -157,12 +152,12 @@ def valid_epoch(model, data_iter, loss_fn, device):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=200)
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--valid_size', type=float, default=0.15)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--loss_fn', type=str, choices=('ce', 'focal'), default='ce')
     parser.add_argument('--optim', type=str, choices=('adam', 'sgd'), default='adam')
-    parser.add_argument('--run_folder', type=str, default='./run/acc')
+    parser.add_argument('--run_folder', type=str, default='./run/baseline')
 
     arguments = parser.parse_args()
     main(arguments)

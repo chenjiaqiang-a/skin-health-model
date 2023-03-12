@@ -70,8 +70,9 @@ class DensityNet18(nn.Module):
         self.classifier = ResNet18(1, out_dim)
 
     def forward(self, image: Tensor, density_gt: Tensor = None, d_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
-        density = self.density_net(image)
+        density_out = self.density_net(image)
 
+        density = density_out.clone()
         if self.training:
             assert density_gt is not None and d_mask is not None,\
                 "Please input density_gt and d_mask while training!"
@@ -79,7 +80,7 @@ class DensityNet18(nn.Module):
 
         out = self.classifier(density)
 
-        return density, out
+        return density_out, out
 
 
 class DensityWithMultiLabelNet18(nn.Module):
@@ -94,8 +95,9 @@ class DensityWithMultiLabelNet18(nn.Module):
             density_gt: Tensor = None,
             d_mask: Tensor = None
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor, Tensor]]:
-        density = self.density_net(image)
+        density_out = self.density_net(image)
 
+        density = density_out.clone()
         if self.training:
             assert density_gt is not None and d_mask is not None, \
                 "Please input density_gt and d_mask while training!"
@@ -103,4 +105,4 @@ class DensityWithMultiLabelNet18(nn.Module):
 
         out_1st, out_2nd, out = self.classifier(density)
 
-        return density, (out_1st, out_2nd, out)
+        return density_out, (out_1st, out_2nd, out)

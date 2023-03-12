@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
-import os
-import datetime
 import argparse
+import datetime
+import os
 
 import numpy as np
 import torch
 
 import config
-from models import MultiLabelNet18
+from models import DensityNet18
 from models.loss_fn import get_loss_fn
-from utils.dataset import ImageWithMultiLabel
-from utils.data_trans import BASIC_TRAIN_TRANS, BASIC_TEST_TRANS
+from share import train_valid_split, get_optimizer
 from utils import save_state_dict, save_result, Logger
-from share import get_optimizer, train_valid_split
+from utils.data_trans import image_density_train_trans, image_density_test_trans
+from utils.dataset import ImageWithDensity
 
 
 def main(args):
@@ -27,29 +27,31 @@ def main(args):
         os.makedirs(image_folder)
     device = torch.device(config.DEVICE)
     logger = Logger(run_folder)
-    logger.info("Acne Severity Grading with Multi-level Category Labels: "
+    logger.info("Acne Severity Grading with Density Map: "
                 f"{run_id} run by {config.EXP_RUNNER} on {device}")
 
     # Data Preparation
     train_dataset, valid_dataset, train_loader, valid_loader = train_valid_split(
-        ImageWithMultiLabel,
+        ImageWithDensity,
         config.TRAIN_CSV_PATH,
         config.IMAGE_DIR,
         args.valid_size,
         args.batch_size,
-        train_args={'transform': BASIC_TRAIN_TRANS},
-        valid_args={'transform': BASIC_TEST_TRANS},
+        train_args={
+            "density_dir": config.DENSITY_MAP_DIR,
+            "transform": image_density_train_trans,
+        },
+        valid_args={
+            "density_dir": config.DENSITY_MAP_DIR,
+            "transform": image_density_test_trans,
+        }
     )
-    logger.info(f"ImageWithMultiLabel {len(train_dataset)} train samples "
+    logger.info(f"ImageWithDensity {len(train_dataset)} train samples "
                 f"and {len(valid_dataset)} valid samples")
 
     # Model Preparation
-    model = MultiLabelNet18(3, config.NUM_1ST_LEVEL_CLASSES,
-                            config.NUM_2ND_LEVEL_CLASSES,
-                            config.NUM_CLASSES).to(device)
-    logger.info("Using model MultiLAbelNet18 with "
-                f"label_1st_map={train_dataset.label_map_1st}, "
-                f"label_map_2nd={train_dataset.label_map_2nd}")
+    model = DensityNet18(config.NUM_CLASSES).to(device)
+    logger.info("Using model DensityNet18")
 
     # Training Preparation
     loss_fn = get_loss_fn(args.loss_fn, reduction="mean")
@@ -71,7 +73,7 @@ def main(args):
     logger.info(f"{run_id} is over!")
 
 
-RESULT_ITEMS = ['loss_1st', 'loss_2nd', 'loss', 'acc_1st', 'acc_2nd', 'acc']
+RESULT_ITEMS = ['loss_mse', 'loss', 'mae', 'mse', 'acc']
 
 
 def train_and_valid(model, loss_fn, optimizer, train_iter, valid_iter,
@@ -88,14 +90,10 @@ def train_and_valid(model, loss_fn, optimizer, train_iter, valid_iter,
         train_ep_out = train_epoch(model, train_iter, loss_fn, optimizer, scheduler, device)
         valid_ep_out = valid_epoch(model, valid_iter, loss_fn, device)
         logger.info(f"Epoch {epoch:>3d}: "
-                    f"TRAIN loss ({train_ep_out['loss_1st']:>7.5f},"
-                    f"{train_ep_out['loss_2nd']:>8.5f},{train_ep_out['loss']:>8.5f}) "
-                    f"acc ({train_ep_out['acc_1st']:>5.3f},"
-                    f"{train_ep_out['acc_2nd']:>6.3f},{train_ep_out['acc']:>6.3f}) | "
-                    f"VALID loss ({valid_ep_out['loss_1st']:>7.5f},"
-                    f"{valid_ep_out['loss_2nd']:>8.5f},{valid_ep_out['loss']:>8.5f}) "
-                    f"acc ({valid_ep_out['acc_1st']:>5.3f},"
-                    f"{valid_ep_out['acc_2nd']:>6.3f},{valid_ep_out['acc']:>6.3f})")
+                    f"TRAIN loss ({train_ep_out['loss_mse']:>8.5f},{train_ep_out['loss']:>8.5f}) "
+                    f"metric ({train_ep_out['mae']:>8.5f},{train_ep_out['mse']:>8.5f},{train_ep_out['acc']:>6.3f}) | "
+                    f"VALID loss ({valid_ep_out['loss_mse']:>8.5f},{valid_ep_out['loss']:>8.5f})"
+                    f"metric ({valid_ep_out['mae']:>8.5f},{valid_ep_out['mse']:>8.5f},{valid_ep_out['acc']:>6.3f})")
 
         for item in RESULT_ITEMS:
             result['train'][item].append(train_ep_out[item])
@@ -111,42 +109,41 @@ def train_and_valid(model, loss_fn, optimizer, train_iter, valid_iter,
 def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
     model.train()
 
-    losses_1st = []
-    losses_2nd = []
+    losses_mse = []
     losses = []
+    total_density_sample = 0
+    total_mae = 0
+    total_mse = 0
     total_sample = 0
-    correct_1st = 0
-    correct_2nd = 0
-    correct = 0
-    for images, (labels_1st, labels_2nd, labels) in data_iter:
+    total_correct = 0
+    for images, (densities, d_masks), labels in data_iter:
         total_sample += len(labels)
+        total_density_sample += torch.sum(torch.ones_like(d_masks)[d_masks]).numpy()
         images = images.to(device)
-        labels_1st, labels_2nd, labels = labels_1st.to(device), labels_2nd.to(device), labels.to(device)
+        densities, d_masks = densities.to(device), d_masks.to(device)
+        labels = labels.to(device)
 
-        out_1st, out_2nd, out = model(images)
-        loss_1st = loss_fn(out_1st, labels_1st)
-        loss_2nd = loss_fn(out_2nd, labels_2nd)
+        density_out, out = model(images, densities, d_masks)
+        loss_mse = torch.mean(torch.sum((density_out[d_masks] - densities[d_masks])**2, dim=0))
         loss = loss_fn(out, labels)
 
         optimizer.zero_grad()
-        (loss + loss_1st + loss_2nd).backward()
+        (loss_mse + loss).backward()
         optimizer.step()
 
-        losses_1st.append(loss_1st.detach().cpu().numpy())
-        losses_2nd.append(loss_2nd.detach().cpu().numpy())
+        losses_mse.append(loss_mse.detach().cpu().numpy())
         losses.append(loss.detach().cpu().numpy())
-        correct_1st += (torch.argmax(out_1st, 1) == labels_1st).int().sum().detach().cpu().numpy()
-        correct_2nd += (torch.argmax(out_2nd, 1) == labels_2nd).int().sum().detach().cpu().numpy()
-        correct += (torch.argmax(out, 1) == labels).int().sum().detach().cpu().numpy()
+        total_mae += torch.sum(torch.abs(density_out[d_masks] - densities[d_masks])).detach().cpu().numpy()
+        total_mse += torch.sum((density_out[d_masks] - densities[d_masks])**2).detach().cpu().numpy()
+        total_correct += (torch.argmax(out, 1) == labels).int().sum().detach().cpu().numpy()
     scheduler.step()
 
     return {
-        'loss_1st': np.mean(losses_1st),
-        'loss_2nd': np.mean(losses_2nd),
+        'loss_mse': np.mean(losses_mse),
         'loss': np.mean(losses),
-        'acc_1st': correct_1st / total_sample,
-        'acc_2nd': correct_2nd / total_sample,
-        'acc': correct / total_sample,
+        'mae': total_mae / total_density_sample,
+        'mse': total_mse / total_density_sample,
+        'acc': total_correct / total_sample,
     }
 
 
@@ -154,37 +151,36 @@ def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
 def valid_epoch(model, data_iter, loss_fn, device):
     model.eval()
 
-    losses_1st = []
-    losses_2nd = []
+    losses_mse = []
     losses = []
+    total_density_sample = 0
+    total_mae = 0
+    total_mse = 0
     total_sample = 0
-    correct_1st = 0
-    correct_2nd = 0
-    correct = 0
-    for images, (labels_1st, labels_2nd, labels) in data_iter:
+    total_correct = 0
+    for images, (densities, d_masks), labels in data_iter:
         total_sample += len(labels)
+        total_density_sample += torch.sum(torch.ones_like(d_masks)[d_masks]).numpy()
         images = images.to(device)
-        labels_1st, labels_2nd, labels = labels_1st.to(device), labels_2nd.to(device), labels.to(device)
+        densities, d_masks = densities.to(device), d_masks.to(device)
+        labels = labels.to(device)
 
-        out_1st, out_2nd, out = model(images)
-        loss_1st = loss_fn(out_1st, labels_1st)
-        loss_2nd = loss_fn(out_2nd, labels_2nd)
+        density_out, out = model(images, densities, d_masks)
+        loss_mse = torch.mean(torch.sum((density_out[d_masks] - densities[d_masks]) ** 2, dim=0))
         loss = loss_fn(out, labels)
 
-        losses_1st.append(loss_1st.detach().cpu().numpy())
-        losses_2nd.append(loss_2nd.detach().cpu().numpy())
+        losses_mse.append(loss_mse.detach().cpu().numpy())
         losses.append(loss.detach().cpu().numpy())
-        correct_1st += (torch.argmax(out_1st, 1) == labels_1st).int().sum().detach().cpu().numpy()
-        correct_2nd += (torch.argmax(out_2nd, 1) == labels_2nd).int().sum().detach().cpu().numpy()
-        correct += (torch.argmax(out, 1) == labels).int().sum().detach().cpu().numpy()
+        total_mae += torch.sum(torch.abs(density_out[d_masks] - densities[d_masks])).detach().cpu().numpy()
+        total_mse += torch.sum((density_out[d_masks] - densities[d_masks]) ** 2).detach().cpu().numpy()
+        total_correct += (torch.argmax(out, 1) == labels).int().sum().detach().cpu().numpy()
 
     return {
-        'loss_1st': np.mean(losses_1st),
-        'loss_2nd': np.mean(losses_2nd),
+        'loss_mse': np.mean(losses_mse),
         'loss': np.mean(losses),
-        'acc_1st': correct_1st / total_sample,
-        'acc_2nd': correct_2nd / total_sample,
-        'acc': correct / total_sample,
+        'mae': total_mae / total_density_sample,
+        'mse': total_mse / total_density_sample,
+        'acc': total_correct / total_sample,
     }
 
 
@@ -196,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--loss_fn', type=str, choices=('ce', 'focal'), default='ce')
     parser.add_argument('--optim', type=str, choices=('adam', 'sgd'), default='adam')
-    parser.add_argument('--run_folder', type=str, default='./run/multi_label')
+    parser.add_argument('--run_folder', type=str, default='./run/density')
 
     arguments = parser.parse_args()
     main(arguments)
