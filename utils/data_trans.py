@@ -43,6 +43,7 @@ def image_density_train_trans(image, density):
 
     if density is None:
         density = np.zeros((128, 128), dtype=np.float32)
+    density = tf.to_tensor(density)
     density = tf.resize(density, [128, 128])
     top = int((128 - 112) * top_ratio)
     left = int((128 - 112) * left_ratio)
@@ -50,7 +51,6 @@ def image_density_train_trans(image, density):
     if flip_ratio < 0.5:
         density = tf.hflip(density)
     density = tf.rotate(density, rotate_angle)
-    density = tf.to_tensor(density)
 
     return image, density
 
@@ -63,9 +63,9 @@ def image_density_test_trans(image, density):
 
     if density is None:
         density = np.zeros((128, 128), dtype=np.float32)
+    density = tf.to_tensor(density)
     density = tf.resize(density, [128, 128])
     density = tf.center_crop(density, [112, 112])
-    density = tf.to_tensor(density)
 
     return image, density
 

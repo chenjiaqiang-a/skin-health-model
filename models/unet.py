@@ -64,11 +64,9 @@ class Up(nn.Module):
 class OutConv(nn.Module):
     def __init__(self, in_planes: int, out_planes: int) -> None:
         super(OutConv, self).__init__()
-        self.maxpool = nn.MaxPool2d(2)
         self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=1)
     
     def forward(self, x: Tensor) -> Tensor:
-        x = self.maxpool(x)
         return self.conv(x)
 
 
@@ -76,15 +74,14 @@ class MiniUNet(nn.Module):
     def __init__(self, in_planes: int, out_planes: int, bilinear: bool = False) -> None:
         super(MiniUNet, self).__init__()
         factor = 2 if bilinear else 1
-        self.inc = DoubleConv(in_planes, 16)
-        self.down1 = Down(16, 32)
-        self.down2 = Down(32, 64)
-        self.down3 = Down(64, 128)
-        self.down4 = Down(128, 256 // factor)
-        self.up1 = Up(256, 128 // factor, bilinear)
-        self.up2 = Up(128, 64 // factor, bilinear)
-        self.up3 = Up(64, 32 // factor, bilinear)
-        self.up4 = Up(32, 16, bilinear)
+        self.inc = DoubleConv(in_planes, 8)
+        self.down1 = Down(8, 16)
+        self.down2 = Down(16, 32)
+        self.down3 = Down(32, 64)
+        self.down4 = Down(64, 128 // factor)
+        self.up1 = Up(128, 64 // factor, bilinear)
+        self.up2 = Up(64, 32 // factor, bilinear)
+        self.up3 = Up(32, 16, bilinear)
         self.outc = OutConv(16, out_planes)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -96,7 +93,6 @@ class MiniUNet(nn.Module):
         out = self.up1(x5, x4)
         out = self.up2(out, x3)
         out = self.up3(out, x2)
-        out = self.up4(out, x1)
         out = self.outc(out)
         return out
 

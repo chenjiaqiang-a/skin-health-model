@@ -1,3 +1,4 @@
+import os
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import pandas as pd
@@ -34,4 +35,7 @@ def train_valid_split(
                               shuffle=True, drop_last=True, num_workers=4)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size,
                               shuffle=False, drop_last=False, num_workers=4)
+
+    os.remove('temp-train.csv')
+    os.remove('temp.valid.csv')
     return train_dataset, valid_dataset, train_loader, valid_loader

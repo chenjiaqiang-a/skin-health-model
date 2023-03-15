@@ -22,6 +22,9 @@ nohup python test.py &
 chmod o+x test.sh
 ./test.sh
 nohuo ./test.sh &
+# stop training
+ps -aux
+kill -9 id
 ```
 压缩/解压文件
 ```shell script

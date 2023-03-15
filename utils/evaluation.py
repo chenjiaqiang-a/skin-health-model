@@ -4,8 +4,8 @@ import numpy as np
 from sklearn import metrics
 
 __all__ = ["Evaluation", "predict", "get_predictions", "probable", "get_probabilities",
-           "get_report", "accuracy", "balanced_accuracy", "precision", "recall",
-           "f1_score", "confusion_matrix", "roc_auc", "roc_curves"]
+           "get_report", "accuracy", "balanced_accuracy", "plus_or_minus_1_accuracy",
+           "precision", "recall", "f1_score", "confusion_matrix", "roc_auc", "roc_curves"]
 
 _device = torch.device("cpu")
 
@@ -66,6 +66,11 @@ def accuracy(preds, targets):
     return metrics.accuracy_score(targets, preds)
 
 
+def plus_or_minus_1_accuracy(preds, targets):
+    result = np.any([preds == targets, preds == targets + 1, preds == targets - 1], axis=0)
+    return np.mean(result.astype(np.int32))
+
+
 def balanced_accuracy(preds, targets):
     return metrics.balanced_accuracy_score(targets, preds)
 
@@ -122,6 +127,8 @@ metric_dict = {
     "acc": accuracy,
     "balanced_accuracy": balanced_accuracy,
     "b_acc": balanced_accuracy,
+    "plus_or_minus_1_accuracy": plus_or_minus_1_accuracy,
+    "+-acc": plus_or_minus_1_accuracy,
     "precision": precision,
     "recall": recall,
     "f1_score": f1_score,
@@ -132,7 +139,8 @@ metric_dict = {
     "roc_curves": roc_curves
 }
 
-_pred_based = ["acc", "accuracy", "balanced_accuracy", "b_acc", "precision",
+_pred_based = ["acc", "accuracy", "balanced_accuracy", "b_acc",
+               "plus_or_minus_1_accuracy", "+-acc", "precision",
                "recall", "f1_score", "confusion_matrix", "c_matrix"]
 
 _prob_based = ["roc_auc", "auc", "roc_curves"]
@@ -195,7 +203,8 @@ class Evaluation:
 
         :param metric: (str/list[str], default="accuracy") the metric method used.
             There are two kinds of metric methods and each has methods below.
-            _pred_based = ["acc", "accuracy", "balanced_accuracy", "b_acc", "precision", "recall", "f1_score"
+            _pred_based = ["acc", "accuracy", "balanced_accuracy", "b_acc",
+                           "plus_or_minus_1_accuracy", "+-acc", "precision", "recall", "f1_score"
                            "confusion_matrix", "c_matrix"]
             _prob_based = ["roc_auc", "auc", "roc_curves"]
         :param model: (Model, default=None) the model to be used, if None, use model in __init__

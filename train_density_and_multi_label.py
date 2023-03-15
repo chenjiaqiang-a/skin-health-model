@@ -95,13 +95,13 @@ def train_and_valid(model, loss_fn, optimizer, train_iter, valid_iter,
         train_ep_out = train_epoch(model, train_iter, loss_fn, optimizer, scheduler, device)
         valid_ep_out = valid_epoch(model, valid_iter, loss_fn, device)
         logger.info(f"Epoch {epoch:>3d}: "
-                    f"TRAIN loss ({train_ep_out['loss_mse']:>8.5f},{train_ep_out['loss_1st']:>8.5f},"
+                    f"TRAIN loss ({train_ep_out['loss_mse']:>8.3f},{train_ep_out['loss_1st']:>8.5f},"
                     f"{train_ep_out['loss_2nd']:>8.5f},{train_ep_out['loss']:>8.5f}) "
-                    f"metric ({train_ep_out['mae']:>8.5f},{train_ep_out['mse']:>8.5f},{train_ep_out['acc_1st']:>6.3f},"
+                    f"metric ({train_ep_out['mae']:>8.3f},{train_ep_out['mse']:>8.3f},{train_ep_out['acc_1st']:>6.3f},"
                     f"{train_ep_out['acc_2nd']:>6.3f},{train_ep_out['acc']:>6.3f}) | "
-                    f"VALID loss ({valid_ep_out['loss_mse']:>8.5f},{valid_ep_out['loss_1st']:>8.5f},"
+                    f"VALID loss ({valid_ep_out['loss_mse']:>8.3f},{valid_ep_out['loss_1st']:>8.5f},"
                     f"{valid_ep_out['loss_2nd']:>8.5f},{valid_ep_out['loss']:>8.5f}) "
-                    f"metric ({valid_ep_out['mae']:>8.5f},{valid_ep_out['mse']:>8.5f},{valid_ep_out['acc_1st']:>6.3f},"
+                    f"metric ({valid_ep_out['mae']:>8.3f},{valid_ep_out['mse']:>8.3f},{valid_ep_out['acc_1st']:>6.3f},"
                     f"{valid_ep_out['acc_2nd']:>6.3f},{valid_ep_out['acc']:>6.3f})")
 
         for item in RESULT_ITEMS:
@@ -137,7 +137,10 @@ def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
         labels_1st, labels_2nd, labels = labels_1st.to(device), labels_2nd.to(device), labels.to(device)
 
         density_out, (out_1st, out_2nd, out) = model(images, densities, d_masks)
-        loss_mse = torch.mean(torch.sum((density_out[d_masks] - densities[d_masks])**2, dim=0))
+        loss_mse = torch.tensor(0, device=device)
+        d_num = torch.sum(torch.ones_like(d_masks)[d_masks])
+        if d_num > 0:
+            loss_mse = torch.sum((density_out[d_masks] - densities[d_masks]) ** 2) / d_num
         loss_1st = loss_fn(out_1st, labels_1st)
         loss_2nd = loss_fn(out_2nd, labels_2nd)
         loss = loss_fn(out, labels)
@@ -193,7 +196,10 @@ def valid_epoch(model, data_iter, loss_fn, device):
         labels_1st, labels_2nd, labels = labels_1st.to(device), labels_2nd.to(device), labels.to(device)
 
         density_out, (out_1st, out_2nd, out) = model(images, densities, d_masks)
-        loss_mse = torch.mean(torch.sum((density_out[d_masks] - densities[d_masks]) ** 2, dim=0))
+        loss_mse = torch.tensor(0, device=device)
+        d_num = torch.sum(torch.ones_like(d_masks)[d_masks])
+        if d_num > 0:
+            loss_mse = torch.sum((density_out[d_masks] - densities[d_masks]) ** 2) / d_num
         loss_1st = loss_fn(out_1st, labels_1st)
         loss_2nd = loss_fn(out_2nd, labels_2nd)
         loss = loss_fn(out, labels)

@@ -8,10 +8,11 @@ from PIL import Image
 __all__ = ['ACNE_CATEGORIES', 'AcneDataset', 'ImageWithMultiLabel',
            'ImageWithDensity', 'ImageWithDensityAndMultiLabel']
 
-ACNE_CATEGORIES = ['Clear', 'Almost', 'Mild',
-                   'Mild to Moderate', 'Moderate',
-                   'Moderate to Less Severe',
-                   'Less Severe', 'Severe']
+ACNE_CATEGORIES_True = ['Clear', 'Almost', 'Mild',
+                        'Mild to Moderate', 'Moderate',
+                        'Moderate to Less Severe',
+                        'Less Severe', 'Severe']
+ACNE_CATEGORIES = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']
 
 
 class AcneDataset(data.Dataset):
@@ -81,7 +82,7 @@ class ImageWithDensity(AcneDataset):
     def __init__(self, csv_file, image_dir, density_dir, categories=None, transform=None, **kwargs):
         super(ImageWithDensity, self).__init__(csv_file, image_dir, categories, transform, **kwargs)
         self.density_dir = density_dir
-        self.density_files = list(self.df['density_map'])
+        self.density_files = list(self.df['density_map'].fillna(0))
 
     def __getitem__(self, index):
         image_path = os.path.join(self.image_dir, self.image_files[index])
@@ -117,4 +118,3 @@ class ImageWithDensityAndMultiLabel(ImageWithDensity):
         label_2nd = self.label_map_2nd[label]
 
         return image, (density, d_mask), (label_1st, label_2nd, label)
-

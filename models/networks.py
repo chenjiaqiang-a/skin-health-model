@@ -23,10 +23,12 @@ class MultiLabelNet18(ResNet18):
         out = self.layer1(out)
         out = self.layer2(out)
         out_1st = self.avgpool(out)
+        out_1st = torch.flatten(out_1st, 1)
         out_1st = self.fc_1st(out_1st)
 
         out = self.layer3(out)
         out_2nd = self.avgpool(out)
+        out_2nd = torch.flatten(out_2nd, 1)
         out_2nd = self.fc_2nd(out_2nd)
 
         out = self.layer4(out)
@@ -49,10 +51,12 @@ class MultiLabelNet34(ResNet34):
         out = self.layer1(out)
         out = self.layer2(out)
         out_1st = self.avgpool(out)
+        out_1st = torch.flatten(out_1st, 1)
         out_1st = self.fc_1st(out_1st)
 
         out = self.layer3(out)
         out_2nd = self.avgpool(out)
+        out_2nd = torch.flatten(out_2nd, 1)
         out_2nd = self.fc_2nd(out_2nd)
 
         out = self.layer4(out)

@@ -12,17 +12,11 @@ def plot_confusion_matrix(cm, classes, title=None, filename="cm.png", cmap="Blue
     plt.rc('font', size='8')  # 设置字体大小
 
     # 按行进行归一化
-    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-
-    # 占比1%以下的单元格，设为0，防止在最后的颜色中体现出来
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            if int(cm[i, j] * 100 + 0.5) == 0:
-                cm[i, j] = 0
+    cm_img = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 
     plt.figure(figsize=(10, 10), facecolor='w')
     fig, ax = plt.subplots()
-    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+    im = ax.imshow(cm_img, interpolation='nearest', cmap=cmap)
     ax.figure.colorbar(im, ax=ax)  # 侧边的颜色条带
 
     ax.set(xticks=np.arange(cm.shape[1]),
@@ -41,13 +35,13 @@ def plot_confusion_matrix(cm, classes, title=None, filename="cm.png", cmap="Blue
 
     # 标注百分比信息
     fmt = 'd'
-    thresh = cm.max() / 2.
+    thresh = cm_img.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            if int(cm[i, j] * 100 + 0.5) > 0:
-                ax.text(j, i, format(int(cm[i, j] * 100 + 0.5), fmt) + '%',
+            if cm[i, j] > 0:
+                ax.text(j, i, format(cm[i, j], fmt),
                         ha="center", va="center",
-                        color="white" if cm[i, j] > thresh else "black")
+                        color="white" if cm_img[i, j] > thresh else "black")
     fig.tight_layout()
     plt.savefig(filename, dpi=300)
     plt.show()
@@ -90,18 +84,18 @@ def plot_train_curve(curves, title=None, filename="loss_acc_curve.png"):
     plt.clf()
 
     plt.subplot(2, 1, 1)
-    plt.plot(curves['train_acc'], '.-', label='train_acc', color='#FF0000')
-    plt.plot(curves['valid_acc'], '.-', label='valid_acc', color='#D2691E')
+    plt.plot(curves['train']['loss'], '.-', label='train loss', color='#FF0000')
+    plt.plot(curves['valid']['loss'], '.-', label='valid loss', color='#D2691E')
     plt.legend(loc='upper left')
     plt.title(title)
-    plt.ylabel('ACC')
+    plt.ylabel('Loss')
 
     plt.subplot(2, 1, 2)
-    plt.plot(curves['train_loss'], '.-', label='train_loss', color='#0000FF')
-    plt.plot(curves['valid_loss'], '.-', label='valid_loss', color='#FF0000')
+    plt.plot(curves['train']['acc'], '.-', label='train acc', color='#0000FF')
+    plt.plot(curves['valid']['acc'], '.-', label='valid acc', color='#FF0000')
     plt.legend(loc='upper right')
     plt.xlabel('EPOCHS')
-    plt.ylabel('LOSS')
+    plt.ylabel('Acc')
 
     fig = plt.gcf()
     fig.savefig(filename)
