@@ -129,7 +129,7 @@ def train_epoch(model, data_iter, loss_fn, optimizer, scheduler, device):
         loss = loss_fn(out, labels)
 
         optimizer.zero_grad()
-        (loss + loss_1st + loss_2nd).backward()
+        (loss_1st + 0.1 * loss_2nd + 0.01 * loss).backward()
         optimizer.step()
 
         losses_1st.append(loss_1st.detach().cpu().numpy())
@@ -190,7 +190,7 @@ def valid_epoch(model, data_iter, loss_fn, device):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--valid_size', type=float, default=0.15)
     parser.add_argument('--lr', type=float, default=1e-4)

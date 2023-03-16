@@ -37,5 +37,5 @@ def train_valid_split(
                               shuffle=False, drop_last=False, num_workers=4)
 
     os.remove('temp-train.csv')
-    os.remove('temp.valid.csv')
+    os.remove('temp-valid.csv')
     return train_dataset, valid_dataset, train_loader, valid_loader

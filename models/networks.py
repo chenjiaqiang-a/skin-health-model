@@ -8,7 +8,7 @@ from .baseline import ResNet18, ResNet34
 from .unet import MiniUNet
 
 __all__ = ['MultiLabelNet18', 'MultiLabelNet34',
-           'DensityNet18', 'DensityWithMultiLabelNet18']
+           'DensityNet18', 'DensityNet43', 'DensityWithMultiLabelNet18']
 
 
 class MultiLabelNet18(ResNet18):
@@ -73,16 +73,24 @@ class DensityNet18(nn.Module):
         self.density_net = MiniUNet(3, 1, True)
         self.classifier = ResNet18(1, out_dim)
 
-    def forward(self, image: Tensor, density_gt: Tensor = None, d_mask: Tensor = None) -> Tuple[Tensor, Tensor]:
+    def forward(self, image: Tensor) -> Tuple[Tensor, Tensor]:
         density_out = self.density_net(image)
 
-        density = density_out.clone()
-        if self.training:
-            assert density_gt is not None and d_mask is not None,\
-                "Please input density_gt and d_mask while training!"
-            density[d_mask] = density_gt[d_mask]
+        out = self.classifier(density_out)
 
-        out = self.classifier(density)
+        return density_out, out
+
+
+class DensityNet43(nn.Module):
+    def __init__(self, out_dim: int) -> None:
+        super(DensityNet43, self).__init__()
+        self.density_net = MiniUNet(3, 1, True)
+        self.classifier = ResNet34(1, out_dim)
+
+    def forward(self, image: Tensor) -> Tuple[Tensor, Tensor]:
+        density_out = self.density_net(image)
+
+        out = self.classifier(density_out)
 
         return density_out, out
 
@@ -93,20 +101,9 @@ class DensityWithMultiLabelNet18(nn.Module):
         self.density_net = MiniUNet(3, 1, True)
         self.classifier = MultiLabelNet18(1, out_dim_1st, out_dim_2nd, out_dim)
 
-    def forward(
-            self,
-            image: Tensor,
-            density_gt: Tensor = None,
-            d_mask: Tensor = None
-    ) -> Tuple[Tensor, Tuple[Tensor, Tensor, Tensor]]:
+    def forward(self, image: Tensor) -> Tuple[Tensor, Tuple[Tensor, Tensor, Tensor]]:
         density_out = self.density_net(image)
 
-        density = density_out.clone()
-        if self.training:
-            assert density_gt is not None and d_mask is not None, \
-                "Please input density_gt and d_mask while training!"
-            density[d_mask] = density_gt[d_mask]
-
-        out_1st, out_2nd, out = self.classifier(density)
+        out_1st, out_2nd, out = self.classifier(density_out)
 
         return density_out, (out_1st, out_2nd, out)

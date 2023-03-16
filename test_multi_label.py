@@ -4,17 +4,17 @@ import argparse
 import os
 import pickle
 
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
 import config
-from models import DensityNet18
-from utils import Logger, Evaluation, plot_train_curve, load_state_dict, accuracy, plus_or_minus_1_accuracy, \
+from models import MultiLabelNet18
+from utils import Logger, load_state_dict, accuracy, plus_or_minus_1_accuracy, \
     confusion_matrix, plot_confusion_matrix
 from utils.data_trans import image_density_test_trans
-from utils.dataset import ImageWithDensity
+from utils.dataset import ImageWithMultiLabel
 
 SUMMARY_ITEMS = [
     'run_id',
@@ -22,10 +22,10 @@ SUMMARY_ITEMS = [
     'test-acc',
     'train-±1acc',
     'test-±1acc',
-    'train-mae',
-    'test-mae',
-    'train-mse',
-    'test-mse',
+    'train-acc_1st',
+    'test-acc_1st',
+    'train-acc_2nd',
+    'test-acc_2nd',
 ]
 
 
@@ -34,29 +34,28 @@ def main(args):
     run_ids = [exp_id for exp_id in os.listdir(base_folder) if 'EXP' in exp_id]
     device = torch.device(config.DEVICE)
     logger = Logger(base_folder)
-    logger.info("Evaluation of Acne Severity Grading by Density Map: "
+    logger.info("Evaluation of Acne Severity Grading by Multi-level Category Labels: "
                 f"run by {config.EXP_RUNNER} on {device}")
 
     # Data Preparation
-    train_dataset = ImageWithDensity(config.TRAIN_CSV_PATH,
-                                     config.IMAGE_DIR,
-                                     config.DENSITY_MAP_DIR,
-                                     transform=image_density_test_trans)
-    test_dataset = ImageWithDensity(config.TEST_CSV_PATH,
-                                    config.IMAGE_DIR,
-                                    config.DENSITY_MAP_DIR,
-                                    transform=image_density_test_trans)
+    train_dataset = ImageWithMultiLabel(config.TRAIN_CSV_PATH,
+                                        config.IMAGE_DIR,
+                                        transform=image_density_test_trans)
+    test_dataset = ImageWithMultiLabel(config.TEST_CSV_PATH,
+                                       config.IMAGE_DIR,
+                                       transform=image_density_test_trans)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
     logger.info(f"ImageWithDensity {len(train_dataset)} train samples "
                 f"and {len(test_dataset)} test samples")
 
     # Model Preparation
-    model = DensityNet18(config.NUM_CLASSES).to(device)
-    logger.info("Using model DensityNet18")
+    model = MultiLabelNet18(3, config.NUM_1ST_LEVEL_CLASSES,
+                            config.NUM_2ND_LEVEL_CLASSES,
+                            config.NUM_CLASSES).to(device)
+    logger.info("Using model MultiLabelNet18")
 
     # Evaluation Preparation
-    evaluation = Evaluation(device=device)
     summary = {
         item: [] for item in SUMMARY_ITEMS
     }
@@ -72,26 +71,25 @@ def main(args):
         with open(os.path.join(run_folder, 'result.pkl'), 'rb') as fp:
             train_output = pickle.load(fp)
         plot_train_curve(train_output, 'training curves', os.path.join(image_folder, 'loss_acc_curve.png'))
-        plot_mae_mse_curve(train_output, 'training mse and mae', os.path.join(image_folder, 'mse_mae_curve.png'))
 
         # Evaluate
         load_state_dict(model, os.path.join(model_folder, 'best-model.pth'))
         train_result = evaluate(model, train_loader, device)
         test_result = evaluate(model, test_loader, device)
         logger.info(f"Evaluation Result: TRAIN acc {train_result['acc']:>5.3f} ±1acc {train_result['+-acc']:>5.3f} "
-                    f"mae {train_result['mae']:>7.3f} mse {train_result['mse']:>6.3f} | "
+                    f"1st acc {train_result['acc_1st']:>5.3f} 2nd acc {train_result['acc_2nd']:>5.3f} | "
                     f"TEST acc {test_result['acc']:>5.3f} ±1acc {test_result['+-acc']:>5.3f} "
-                    f"mae {test_result['mae']:>7.3} mse {test_result['mse']:>6.3}")
+                    f"1st acc {test_result['acc_1st']:>5.3} 2nd acc {test_result['acc_2nd']:>5.3}")
 
         # Save Result
         summary['train-acc'].append(train_result["acc"])
         summary['train-±1acc'].append(train_result["+-acc"])
-        summary['train-mae'].append(train_result['mae'])
-        summary['train-mse'].append(train_result['mse'])
+        summary['train-acc_1st'].append(train_result['acc_1st'])
+        summary['train-acc_2nd'].append(train_result['acc_2nd'])
         summary['test-acc'].append(test_result["acc"])
         summary['test-±1acc'].append(test_result["+-acc"])
-        summary['test-mae'].append(test_result['mae'])
-        summary['test-mse'].append(test_result['mse'])
+        summary['test-acc_1st'].append(test_result['acc_1st'])
+        summary['test-acc_2nd'].append(test_result['acc_2nd'])
 
         plot_confusion_matrix(train_result['c_matrix'],
                               train_dataset.categories,
@@ -117,24 +115,30 @@ def main(args):
     df.to_csv(os.path.join(base_folder, 'evaluation.csv'), index=False)
 
 
-def plot_mae_mse_curve(curves, title=None, filename='mae_mse_curve.png'):
+def plot_train_curve(curves, title=None, filename='loss_acc_curve.png'):
     plt.clf()
 
     plt.subplot(2, 1, 1)
-    plt.plot(curves['train']['loss_mse'], '.-', label='train mse loss', color='#FF7644')
-    plt.plot(curves['train']['mse'], '.-', label='train mse', color='#FF7644', alpha=0.3)
-    plt.plot(curves['valid']['loss_mse'], '.-', label='valid mse loss', color='#F59E0B')
-    plt.plot(curves['valid']['mse'], '.-', label='valid mse', color='#F59E0B', alpha=0.3)
+    plt.plot(curves['train']['loss'], '.-', label='train loss', color='#FF7644')
+    plt.plot(curves['train']['loss_1st'], '.-', label='train 1st loss', color='#FF7644', alpha=0.6)
+    plt.plot(curves['train']['loss_2nd'], '.-', label='train 2nd loss', color='#FF7644', alpha=0.3)
+    plt.plot(curves['valid']['loss'], '.-', label='valid loss', color='#F59E0B')
+    plt.plot(curves['valid']['loss_1st'], '.-', label='valid 1st loss', color='#F59E0B', alpha=0.6)
+    plt.plot(curves['valid']['loss_2nd'], '.-', label='valid 2nd loss', color='#F59E0B', alpha=0.3)
     plt.legend(loc='upper right')
     plt.title(title)
-    plt.ylabel('MSE')
+    plt.ylabel('LOSS')
 
     plt.subplot(2, 1, 2)
-    plt.plot(curves['train']['mae'], '.-', label='train mae', color='#D42BE6')
-    plt.plot(curves['valid']['mae'], '.-', label='train mae', color='#8848FF')
-    plt.legend(loc='upper right')
+    plt.plot(curves['train']['acc'], '.-', label='train acc', color='#D42BE6')
+    plt.plot(curves['train']['acc_1st'], '.-', label='train 1st acc', color='#D42BE6', alpha=0.6)
+    plt.plot(curves['train']['acc_2nd'], '.-', label='train 2nd acc', color='#D42BE6', alpha=0.3)
+    plt.plot(curves['valid']['acc'], '.-', label='train acc', color='#8848FF')
+    plt.plot(curves['valid']['acc_1st'], '.-', label='train 1st acc', color='#8848FF', alpha=0.6)
+    plt.plot(curves['valid']['acc_2nd'], '.-', label='train 2nd acc', color='#8848FF', alpha=0.3)
+    plt.legend(loc='lower right')
     plt.xlabel('EPOCHS')
-    plt.ylabel('MAE')
+    plt.ylabel('ACC')
 
     fig = plt.gcf()
     fig.savefig(filename)
@@ -148,38 +152,42 @@ def evaluate(model, data_loader, device):
 
     preds = []
     targets = []
-    total_density_sample = 0
-    total_mae = 0
-    total_mse = 0
-    for images, (densities, d_masks), labels in data_loader:
-        total_density_sample += torch.sum(torch.ones_like(d_masks)[d_masks]).numpy()
+    preds_1st = []
+    targets_1st = []
+    preds_2nd = []
+    targets_2nd = []
+    for images, (labels_1st, labels_2nd, labels) in data_loader:
         images = images.to(device)
-        densities, d_masks = densities.to(device), d_masks.to(device)
-        labels = labels.to(device)
+        labels_1st, labels_2nd, labels = labels_1st.to(device), labels_2nd.to(device), labels.to(device)
 
-        density_out, out = model(images, densities, d_masks)
-
-        total_mae += torch.sum(torch.abs(density_out[d_masks] - densities[d_masks])).detach().cpu().numpy()
-        total_mse += torch.sum((density_out[d_masks] - densities[d_masks]) ** 2).detach().cpu().numpy()
+        out_1st, out_2nd, out = model(images)
 
         preds.append(torch.argmax(out, dim=1))
         targets.append(labels)
+        preds_1st.append(torch.argmax(out_1st, dim=1))
+        targets_1st.append(labels_1st)
+        preds_2nd.append(torch.argmax(out_2nd, dim=1))
+        targets_2nd.append(labels_2nd)
     preds = torch.cat(preds, dim=-1).cpu().numpy()
     targets = torch.cat(targets, dim=-1).cpu().numpy()
+    preds_1st = torch.cat(preds_1st, dim=-1)
+    targets_1st = torch.cat(targets_1st, dim=-1)
+    preds_2nd = torch.cat(preds_2nd, dim=-1)
+    targets_2nd = torch.cat(targets_2nd, dim=-1)
 
     return {
         'acc': accuracy(preds, targets),
         '+-acc': plus_or_minus_1_accuracy(preds, targets),
+        'acc-1st': accuracy(preds_1st, targets_1st),
+        'acc-2nd': accuracy(preds_2nd, targets_2nd),
         'c_matrix': confusion_matrix(preds, targets),
-        'mae': total_mae / total_density_sample,
-        'mse': total_mse / total_density_sample,
     }
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--run_folder', type=str, default='./run/density')
+    parser.add_argument('--run_folder', type=str, default='./run/multi_label')
 
     arguments = parser.parse_args()
     main(arguments)
