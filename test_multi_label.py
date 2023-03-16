@@ -13,7 +13,7 @@ import config
 from models import MultiLabelNet18
 from utils import Logger, load_state_dict, accuracy, plus_or_minus_1_accuracy, \
     confusion_matrix, plot_confusion_matrix
-from utils.data_trans import image_density_test_trans
+from utils.data_trans import BASIC_TEST_TRANS
 from utils.dataset import ImageWithMultiLabel
 
 SUMMARY_ITEMS = [
@@ -40,10 +40,10 @@ def main(args):
     # Data Preparation
     train_dataset = ImageWithMultiLabel(config.TRAIN_CSV_PATH,
                                         config.IMAGE_DIR,
-                                        transform=image_density_test_trans)
+                                        transform=BASIC_TEST_TRANS)
     test_dataset = ImageWithMultiLabel(config.TEST_CSV_PATH,
                                        config.IMAGE_DIR,
-                                       transform=image_density_test_trans)
+                                       transform=BASIC_TEST_TRANS)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=4)
     logger.info(f"ImageWithDensity {len(train_dataset)} train samples "
@@ -170,10 +170,10 @@ def evaluate(model, data_loader, device):
         targets_2nd.append(labels_2nd)
     preds = torch.cat(preds, dim=-1).cpu().numpy()
     targets = torch.cat(targets, dim=-1).cpu().numpy()
-    preds_1st = torch.cat(preds_1st, dim=-1)
-    targets_1st = torch.cat(targets_1st, dim=-1)
-    preds_2nd = torch.cat(preds_2nd, dim=-1)
-    targets_2nd = torch.cat(targets_2nd, dim=-1)
+    preds_1st = torch.cat(preds_1st, dim=-1).cpu().numpy()
+    targets_1st = torch.cat(targets_1st, dim=-1).cpu().numpy()
+    preds_2nd = torch.cat(preds_2nd, dim=-1).cpu().numpy()
+    targets_2nd = torch.cat(targets_2nd, dim=-1).cpu().numpy()
 
     return {
         'acc': accuracy(preds, targets),
