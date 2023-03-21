@@ -43,8 +43,8 @@ def main(args):
                 f"and {len(test_dataset)} test samples")
 
     # Model Preparation
-    model = ResNet18(3, config.NUM_CLASSES).to(device)
-    logger.info("Using model ResNet18")
+    model = ResNet18(config.NUM_CLASSES).to(device)
+    logger.info(f"Using model {model}")
 
     # Evaluation Preparation
     evaluation = Evaluation(device=device)

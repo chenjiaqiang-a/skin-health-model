@@ -53,7 +53,7 @@ def main(args):
 
     # Model Preparation
     model = DensityNet18(config.NUM_CLASSES).to(device)
-    logger.info("Using model DensityNet18")
+    logger.info(f"Using model {model}")
 
     # Evaluation Preparation
     evaluation = Evaluation(device=device)
@@ -157,7 +157,7 @@ def evaluate(model, data_loader, device):
         densities, d_masks = densities.to(device), d_masks.to(device)
         labels = labels.to(device)
 
-        density_out, out = model(images, densities, d_masks)
+        density_out, out = model(images)
 
         total_mae += torch.sum(torch.abs(density_out[d_masks] - densities[d_masks])).detach().cpu().numpy()
         total_mse += torch.sum((density_out[d_masks] - densities[d_masks]) ** 2).detach().cpu().numpy()

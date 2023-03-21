@@ -5,14 +5,7 @@ import pandas as pd
 from torch.utils import data
 from PIL import Image
 
-__all__ = ['ACNE_CATEGORIES', 'AcneDataset', 'ImageWithMultiLabel',
-           'ImageWithDensity', 'ImageWithDensityAndMultiLabel']
-
-ACNE_CATEGORIES_True = ['Clear', 'Almost', 'Mild',
-                        'Mild to Moderate', 'Moderate',
-                        'Moderate to Less Severe',
-                        'Less Severe', 'Severe']
-ACNE_CATEGORIES = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']
+__all__ = ['AcneDataset', 'ImageWithDensity']
 
 
 class AcneDataset(data.Dataset):
@@ -24,10 +17,10 @@ class AcneDataset(data.Dataset):
         self.image_files = list(self.df['filename'])
         self.labels = list(self.df['label'])
 
-        if categories is None:
-            categories = ACNE_CATEGORIES
-        self.categories = categories
         self.counter = Counter(self.labels)
+        if categories is None:
+            categories = [i for i in self.counter]
+        self.categories = categories
         self._category_to_label = {
             category: label for label, category in enumerate(self.categories)
         }
@@ -54,30 +47,6 @@ class AcneDataset(data.Dataset):
         return [self.categories[label] for label in label_list]
 
 
-LEVEL_1ST_LABEL_MAPS = {
-    'base': [0, 0, 1, 0, 0, 0, 0, 0]
-}
-LEVEL_2ND_LABEL_MAPS = {
-    'base': [0, 0, 1, 2, 3, 0, 3, 2]
-}
-
-
-class ImageWithMultiLabel(AcneDataset):
-    def __init__(self, csv_file, image_dir,
-                 label_map_1st='base', label_map_2nd='base',
-                 categories=None, transform=None, **kwargs):
-        super(ImageWithMultiLabel, self).__init__(csv_file, image_dir, categories, transform, **kwargs)
-        self.label_map_1st = LEVEL_1ST_LABEL_MAPS[label_map_1st]
-        self.label_map_2nd = LEVEL_2ND_LABEL_MAPS[label_map_2nd]
-
-    def __getitem__(self, index):
-        image, label = super(ImageWithMultiLabel, self).__getitem__(index)
-        label_1st = self.label_map_1st[label]
-        label_2nd = self.label_map_2nd[label]
-
-        return image, (label_1st, label_2nd, label)
-
-
 class ImageWithDensity(AcneDataset):
     def __init__(self, csv_file, image_dir, density_dir, categories=None, transform=None, **kwargs):
         super(ImageWithDensity, self).__init__(csv_file, image_dir, categories, transform, **kwargs)
@@ -101,20 +70,3 @@ class ImageWithDensity(AcneDataset):
         label = self.labels[index]
 
         return image, (density, d_mask), label
-
-
-class ImageWithDensityAndMultiLabel(ImageWithDensity):
-    def __init__(self, csv_file, image_dir, density_dir,
-                 label_map_1st='base', label_map_2nd='base',
-                 categories=None, transform=None, **kwargs):
-        super(ImageWithDensityAndMultiLabel, self).__init__(csv_file, image_dir, density_dir,
-                                                            categories, transform, **kwargs)
-        self.label_map_1st = LEVEL_1ST_LABEL_MAPS[label_map_1st]
-        self.label_map_2nd = LEVEL_2ND_LABEL_MAPS[label_map_2nd]
-
-    def __getitem__(self, index):
-        image, (density, d_mask), label = super(ImageWithDensityAndMultiLabel, self).__getitem__(index)
-        label_1st = self.label_map_1st[label]
-        label_2nd = self.label_map_2nd[label]
-
-        return image, (density, d_mask), (label_1st, label_2nd, label)

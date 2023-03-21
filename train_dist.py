@@ -6,14 +6,42 @@ import os
 
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 import config
-from models import ResNet18
-from models.loss_fn import get_loss_fn
+from models import ResNet50
 from share import train_valid_split, get_optimizer
 from utils import save_state_dict, save_result, Logger
 from utils.data_trans import BASIC_TRAIN_TRANS, BASIC_TEST_TRANS
 from utils.dataset import AcneDataset
+
+
+class DistLoss(nn.Module):
+    def __init__(self, score_1st=0.6, score_2nd=0.2, weight=None, reduction="mean") -> None:
+        super(DistLoss, self).__init__()
+        self.score_1st = score_1st
+        self.score_2nd = score_2nd
+        self.weight = weight
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        hat = F.one_hot(torch.arange(inputs.shape[1])) * self.score_1st
+        for i in range(1, inputs.shape[1]):
+            hat[i, i - 1] = self.score_2nd
+            hat[i - 1, i] = self.score_2nd
+        hat = hat[targets]
+
+        loss = -torch.log(torch.softmax(inputs, dim=1)) * hat.to(inputs.device)
+        if self.reduction == "sum":
+            return torch.sum(loss)
+        elif self.reduction == "mean":
+            return torch.mean(torch.sum(loss, dim=1))
+        else:
+            return torch.sum(loss, dim=1)
+
+    def __str__(self):
+        return "<DistLoss>"
 
 
 def main(args):
@@ -27,7 +55,7 @@ def main(args):
         os.makedirs(image_folder)
     device = torch.device(config.DEVICE)
     logger = Logger(run_folder)
-    logger.info(f"Acne Severity Grading Baseline: {run_id} run by {config.EXP_RUNNER} on {device}")
+    logger.info(f"Acne Severity Grading by Dist Loss: {run_id} run by {config.EXP_RUNNER} on {device}")
 
     # Data Preparation
     train_dataset, valid_dataset, train_loader, valid_loader = train_valid_split(
@@ -43,16 +71,16 @@ def main(args):
                 f"and {len(valid_dataset)} valid samples")
 
     # Model Preparation
-    model = ResNet18(config.NUM_CLASSES).to(device)
+    model = ResNet50(config.NUM_CLASSES).to(device)
     logger.info(f"Using model {model}")
 
     # Training Preparation
-    loss_fn = get_loss_fn(args.loss_fn, reduction="mean")
+    loss_fn = DistLoss()
     optimizer = get_optimizer(args.optim, model.parameters(), args.lr)
     logger.info("Training parameters:\n"
                 f"batch_size      {args.batch_size}\n"
                 f"epochs          {args.epochs}\n"
-                f"loss_fn         {args.loss_fn}\n"
+                f"loss_fn         {loss_fn}\n"
                 f"learning_rate   {args.lr}\n"
                 f"optimizer       {args.optim}")
 
@@ -80,6 +108,10 @@ def train_and_valid(model, loss_fn, optimizer, train_iter, valid_iter,
     }
     best_valid_acc = 0
     for epoch in range(1, epochs + 1):
+        if epoch % 4 == 0:
+            loss_fn = DistLoss(1.2, -0.1)
+        else:
+            loss_fn = DistLoss(0.6, 0.2)
         train_ep_out = train_epoch(model, train_iter, loss_fn, optimizer, scheduler, device)
         valid_ep_out = valid_epoch(model, valid_iter, loss_fn, device)
         logger.info(f"Epoch {epoch:>3d}: "
@@ -155,9 +187,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--valid_size', type=float, default=0.15)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--loss_fn', type=str, choices=('ce', 'focal'), default='ce')
     parser.add_argument('--optim', type=str, choices=('adam', 'sgd'), default='adam')
-    parser.add_argument('--run_folder', type=str, default='./run/baseline')
+    parser.add_argument('--run_folder', type=str, default='./run/dist')
 
     arguments = parser.parse_args()
     main(arguments)
